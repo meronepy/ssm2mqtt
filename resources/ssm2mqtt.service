@@ -1,0 +1,11 @@
+[Unit]
+Description=Sesame 5 BLE to MQTT bridge
+After=bluetooth.target mosquitto.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
