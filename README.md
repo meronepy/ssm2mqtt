@@ -220,16 +220,12 @@ mosquitto_sub -t "ssm2mqtt/getLockCurrentState"
 
     ```shell-session
     $ /usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/discover.py
-    Starting scan.
-
-    Address: XX:XX:XX:XX:XX:XX
-    Model: Sesame 5
-    name: None
-    RSSI: -77
-    Registered: True
-    UUID: 12345678-90ab-cdef-1234-567890abcdef
-
-    Scan completed.
+    Address    : XX:XX:XX:XX:XX:XX
+    Model      : Sesame 5
+    Name       : None
+    RSSI       : -88
+    Registered : True
+    UUID       : 12345678-90ab-cdef-1234-567890abcdef
     ```
 
 - `secret_key`はmochipon様作成の[QR Code Reader for SESAME](https://sesame-qr-reader.vercel.app/)を使用して、マネージャー権限以上のQRコードから抽出できます。
