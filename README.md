@@ -1,6 +1,6 @@
 # 📡 ssm2mqtt
 
-![Python](https://img.shields.io/badge/Python-3.11-5da1d8)
+![Python](https://img.shields.io/badge/python-3.11-5da1d8)
 [![License](https://img.shields.io/badge/license-MIT-5da1d8)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%2F%20Windows%20%2F%20macOS-ffb8d2)
 
