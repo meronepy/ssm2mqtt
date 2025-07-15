@@ -22,9 +22,7 @@ async def main():
     devices = await BleakScanner.discover(
         timeout=10, return_adv=True, service_uuids=[UUID_SERVICE]
     )
-    for device in devices.values():
-        ble_device = device[0]
-        adv_data = device[1]
+    for ble_device, adv_data in devices.values():
         mfr_data = adv_data.manufacturer_data[COMPANY_ID]
         model_id = int.from_bytes(mfr_data[0:2], byteorder="little")
         match model_id:

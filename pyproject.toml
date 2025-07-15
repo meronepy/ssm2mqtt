@@ -1,6 +1,6 @@
 [project]
 name = "ssm2mqtt"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = [
     {name = "meronepy",email = "203420124+meronepy@users.noreply.github.com"}
