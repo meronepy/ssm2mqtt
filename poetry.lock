@@ -100,7 +100,7 @@ files = [
 
 [[package]]
 name = "gomalock"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
 optional = false
 python-versions = ">=3.10"
@@ -116,7 +116,7 @@ pycryptodome = ">=3.23.0,<4.0.0"
 type = "git"
 url = "https://github.com/meronepy/gomalock.git"
 reference = "HEAD"
-resolved_reference = "62dffe2a09abb75435b118e4b5b1d1c08b0864b4"
+resolved_reference = "3c0a72307a71d8a255c6271c19c79809f3cd1aa2"
 
 [[package]]
 name = "paho-mqtt"
@@ -552,4 +552,4 @@ all = ["winrt-Windows.Foundation.Collections[all] (>=3.2.1.0,<3.3.0.0)", "winrt-
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "7f19a855c8230939b5136f2f66b154fb9ab95e2bcd6aa0153509584ce6056e99"
+content-hash = "575318f09e8aefb7569d9a3c7809b3d2d3fd8e5266ceb201f1db03892dd84076"

@@ -8,8 +8,8 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
-    "gomalock @ git+https://github.com/meronepy/gomalock.git",
-    "aiomqtt (>=2.4.0,<3.0.0)"
+    "aiomqtt (>=2.4.0,<3.0.0)",
+    "gomalock @ git+https://github.com/meronepy/gomalock.git"
 ]
 
 [tool.poetry]

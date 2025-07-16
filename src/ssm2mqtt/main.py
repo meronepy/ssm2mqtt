@@ -72,7 +72,7 @@ async def sesame5_client(
     """
     sesame5 = await scan_sesame(address, 20)
     await sesame5.connect()
-    await sesame5.wait_for_login(secret_key)
+    await sesame5.login(secret_key)
     try:
         yield sesame5
     finally:
