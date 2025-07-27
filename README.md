@@ -1,4 +1,4 @@
-# 📡 ssm2mqtt
+# [ssm2mqtt](https://github.com/meronepy/ssm2mqtt)
 
 ![Python](https://img.shields.io/badge/python-3.11-5da1d8)
 [![License](https://img.shields.io/badge/license-MIT-5da1d8)](LICENSE)
