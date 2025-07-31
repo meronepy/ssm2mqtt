@@ -211,7 +211,7 @@ class Ssm2MqttBridge:
             self._sesame_config.toggle_command,
         )
         async with AsyncExitStack() as stack:
-            logger.debug("Connecting to mqtt broker.")
+            logger.debug("Connecting to MQTT broker.")
             mqttc = await stack.enter_async_context(
                 aiomqtt.Client(
                     self._mqtt_config.mqtt_host,
@@ -220,16 +220,16 @@ class Ssm2MqttBridge:
                     password=self._mqtt_config.mqtt_password,
                 )
             )
-            logger.debug("Conneceted to mqtt broker.")
+            logger.info("Conneceted to MQTT broker.")
 
-            logger.debug("Connecting to sesame.")
+            logger.debug("Connecting to Sesame.")
             sesame = await stack.enter_async_context(
                 sesame5_client(
                     self._sesame_config.sesame_address,
                     self._sesame_config.sesame_secret_key,
                 )
             )
-            logger.debug("Connected to sesame.")
+            logger.info("Connected to Sesame.")
 
             async def on_mechstatus_changed(status: Sesame5MechStatus) -> None:
                 await self._mechstatus_publisher(
