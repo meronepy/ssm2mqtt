@@ -152,7 +152,9 @@ class Ssm2MqttBridge:
         )
         payload = json.dumps(
             {
+                "position": mech_status.position,
                 "lockCurrentState": lock_status,
+                "batteryVoltage": mech_status.battery_voltage,
                 "batteryLevel": mech_status.battery_percentage,
                 "chargingState": "NOT_CHARGEABLE",
                 "statusLowBattery": mech_status.is_battery_critical,
