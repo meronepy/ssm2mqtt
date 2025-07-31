@@ -13,7 +13,7 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 ## 🚀 機能
 
 - MQTTのメッセージに応じてSesame 5をBLE経由で施錠、開錠、トグル操作。
-- 施錠状態、電池残量、電池不足警告をBLE経由でリアルタイムでMQTTにパブリッシュ。
+- サムターン位置、施錠状態、電池電圧、電池残量、電池不足警告をBLE経由でリアルタイムでMQTTにパブリッシュ。
 
 ---
 
@@ -159,7 +159,7 @@ mosquitto_sub -t "ssm2mqtt/getLockCurrentState"
 デバイスの状態は以下のフォーマットでパブリッシュされます。
 
 ```json
-{"lockCurrentState": "S", "batteryLevel": 100, "chargingState": "NOT_CHARGEABLE", "statusLowBattery": false}
+{"position": -10, "lockCurrentState": "S", "batteryVoltage": 6.04, "batteryLevel": 100, "chargingState": "NOT_CHARGEABLE", "statusLowBattery": false}
 ```
 
 `lockCurrentState`は、`config.json`で`lock_command`または`unlock_command`に設定した文字が表示されます。
