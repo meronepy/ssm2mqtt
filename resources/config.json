@@ -1,18 +1,13 @@
 {
+    "history_name": "ssm2mqtt",
     "mqtt": {
+        "base_topic": "ssm2mqtt",
         "host": "localhost",
         "port": 1883,
-        "topic_publish": "ssm2mqtt/getLockCurrentState",
-        "topic_subscribe": "ssm2mqtt/setLockTargetState",
         "user": "",
         "password": ""
     },
-    "sesame": {
-        "mac_address": "XX:XX:XX:XX:XX:XX",
-        "secret_key": "1234567890abcdef1234567890abcdef",
-        "history_name": "ssm2mqtt",
-        "lock_command": "S",
-        "unlock_command": "U",
-        "toggle_command": "T"
+    "devices": {
+        "XX:XX:XX:XX:XX:XX": "1234567890abcdef1234567890abcdef"
     }
 }

@@ -1,2 +1,2 @@
-git+https://github.com/meronepy/gomalock.git@main
-aiomqtt
+aiomqtt==2.4.0
+git+https://github.com/meronepy/gomalock.git#v0.3.0

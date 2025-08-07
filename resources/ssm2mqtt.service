@@ -1,6 +1,6 @@
 [Unit]
-Description=Sesame 5 BLE to MQTT bridge
-After=bluetooth.target mosquitto.service
+Description=MQTT-to-Sesame 5 bridge for lock control and status reporting.
+After=network.target bluetooth.target
 
 [Service]
 Type=simple
