@@ -18,7 +18,7 @@ from typing import NamedTuple
 import aiomqtt
 from gomalock import sesame5
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
 logging.getLogger("gomalock").setLevel(level=logging.WARNING)
 logger = logging.getLogger(__name__)
