@@ -21,20 +21,20 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 
 ### セサミの操作
 
-`ベーストピック/セサミのUUID/set`トピックに、`LOCK`または`UNLOCK`をパブリッシュすることで操作できます。
+`ベーストピック/セサミのUUID/set`トピックに、`LOCKED`または`UNLOCKED`をパブリッシュすることで操作できます。
 
 セサミのUUIDは公式アプリまたは[後述の方法](#設定値の取得方法)で確認できます。
 
 施錠例
 
 ```bash
-mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "LOCK"
+mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "LOCKED"
 ```
 
 開錠例
 
 ```bash
-mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "UNLOCK"
+mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "UNLOCKED"
 ```
 
 ### セサミの状態の受信

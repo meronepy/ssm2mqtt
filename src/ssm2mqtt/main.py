@@ -280,12 +280,12 @@ async def consume_command(
             command_queue.task_done()
             continue
         match command.payload:
-            case "LOCK":
+            case "LOCKED":
                 await sesame.lock(history_name)
                 logger.debug(
                     "Send lock command to Sesame (UUID=%s)", command.device_uuid
                 )
-            case "UNLOCK":
+            case "UNLOCKED":
                 await sesame.unlock(history_name)
                 logger.debug(
                     "Send unlock command to Sesame (UUID=%s)", command.device_uuid
