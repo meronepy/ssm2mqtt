@@ -68,7 +68,7 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 2. zipファイルを展開、`/usr/local/bin/ssm2mqtt`に配置。
 
     ```bash
-    unzip 'ssm2mqtt*.zip'
+    unzip "ssm2mqtt*.zip"
     sudo cp -r ssm2mqtt /usr/local/bin/ssm2mqtt
     ```
 
