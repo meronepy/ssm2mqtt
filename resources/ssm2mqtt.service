@@ -1,11 +1,11 @@
 [Unit]
-Description=MQTT-to-Sesame 5 bridge for lock control and status reporting.
+Description=MQTT to Sesame 5 bridge for lock control and status reporting
 Wants=network-online.target
 After=network-online.target bluetooth.target
 
 [Service]
 Type=simple
-WorkingDirectory=/usr/local/bin/ssm2mqtt/
+WorkingDirectory=/usr/local/bin/ssm2mqtt
 ExecStart=/usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/main.py
 Restart=always
 
