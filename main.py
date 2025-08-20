@@ -11,12 +11,19 @@ import contextlib
 import functools
 import json
 import logging
+import os
 import signal
+import sys
 import uuid
 from typing import NamedTuple
 
 import aiomqtt
 from gomalock import sesame5
+
+if sys.platform.lower() == "win32" or os.name.lower() == "nt":
+    from asyncio import WindowsSelectorEventLoopPolicy, set_event_loop_policy
+
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
