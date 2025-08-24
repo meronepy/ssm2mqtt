@@ -1,4 +1,4 @@
-"""MQTT-to-Sesame 5 bridge for lock control and status reporting.
+"""MQTT to Sesame 5 bridge for lock control and status reporting.
 
 This module connects to a set of Sesame smart locks over Bluetooth using the gomalock
 library, and integrates them with an MQTT broker. It listens for lock/unlock commands
@@ -65,16 +65,28 @@ class TargetDevice(NamedTuple):
     secret_key: str
 
 
-class QueueCommand(NamedTuple):
-    """Data structure to use for queues.
+class CommandPayload(NamedTuple):
+    """Data structure to use for command.
 
     Attributes:
         device_uuid: UUID specifying the desired device.
-        payload: Operation instructions or Sesame status.
+        message: Received message.
     """
 
     device_uuid: uuid.UUID
-    payload: str
+    message: bytes
+
+
+class StatusPayload(NamedTuple):
+    """Data structure to use for status.
+
+    Attributes:
+        device_uuid: UUID specifying the desired device.
+        mech_status: Sesame 5 mechanical status.
+    """
+
+    device_uuid: uuid.UUID
+    mech_status: sesame5.Sesame5MechStatus
 
 
 async def force_terminate_task_group():
@@ -154,7 +166,7 @@ async def setup_mqtt(
 async def setup_devices(
     stack: contextlib.AsyncExitStack,
     target_devices: list[TargetDevice],
-    status_queue: asyncio.Queue[QueueCommand],
+    status_queue: asyncio.Queue[StatusPayload],
 ) -> dict[uuid.UUID, sesame5.Sesame5]:
     """Initializes and connects to Sesame devices, registering status callbacks.
 
@@ -180,58 +192,63 @@ async def setup_devices(
 
 
 def produce_status(
-    status_queue: asyncio.Queue[QueueCommand],
+    status_queue: asyncio.Queue[StatusPayload],
     device_uuid: uuid.UUID,
     mech_status: sesame5.Sesame5MechStatus,
 ) -> None:
     """Formats device mechanical status and enqueues it for processing.
 
     Args:
-        status_queue: Queue to send formatted status command.
+        status_queue: Queue to send status.
         device_uuid: UUID of the device.
         mech_status: Mechanical status of the device.
     """
-    lock_state = "LOCKED" if mech_status.is_in_lock_range else "UNLOCKED"
-    payload = json.dumps(
-        {
-            "position": mech_status.position,
-            "lockCurrentState": lock_state,
-            "batteryVoltage": mech_status.battery_voltage,
-            "batteryLevel": mech_status.battery_percentage,
-            "chargingState": "NOT_CHARGEABLE",
-            "statusLowBattery": mech_status.is_battery_critical,
-        }
-    )
     logger.debug("Received status update from Sesame (UUID=%s)", device_uuid)
     try:
-        status_queue.put_nowait(QueueCommand(device_uuid, payload))
+        status_queue.put_nowait(StatusPayload(device_uuid, mech_status))
     except asyncio.QueueShutDown:
         logger.warning("Shutting down, status discarded.")
 
 
 async def consume_status(
-    status_queue: asyncio.Queue[QueueCommand], mqttc: aiomqtt.Client, base_topic: str
+    status_queue: asyncio.Queue[StatusPayload], mqttc: aiomqtt.Client, base_topic: str
 ) -> None:
     """Continuously consumes status updates from the queue and publishes them to MQTT.
 
     Args:
-        status_queue: Queue containing status messages to publish.
+        status_queue: Queue containing status.
         mqttc: MQTT client used to publish messages.
         base_topic: Topic prefix for MQTT publishing.
     """
     while True:
         try:
-            command = await status_queue.get()
+            status_payload = await status_queue.get()
         except asyncio.QueueShutDown:
             break
-        topic = f"{base_topic}/{command.device_uuid}/get"
-        await mqttc.publish(topic, command.payload)
-        logger.debug("Published status to MQTT (topic=%s)", topic)
-        status_queue.task_done()
+        try:
+            payload = json.dumps(
+                {
+                    "position": status_payload.mech_status.position,
+                    "lockCurrentState": (
+                        "LOCKED"
+                        if status_payload.mech_status.is_in_lock_range
+                        else "UNLOCKED"
+                    ),
+                    "batteryVoltage": status_payload.mech_status.battery_voltage,
+                    "batteryLevel": status_payload.mech_status.battery_percentage,
+                    "chargingState": "NOT_CHARGEABLE",
+                    "statusLowBattery": status_payload.mech_status.is_battery_critical,
+                }
+            )
+            topic = f"{base_topic}/{status_payload.device_uuid}/get"
+            await mqttc.publish(topic, payload)
+            logger.debug("Published status to MQTT (topic=%s)", topic)
+        finally:
+            status_queue.task_done()
 
 
 async def produce_command(
-    command_queue: asyncio.Queue[QueueCommand], mqttc: aiomqtt.Client
+    command_queue: asyncio.Queue[CommandPayload], mqttc: aiomqtt.Client
 ) -> None:
     """Listens for incoming MQTT messages and enqueues valid commands.
 
@@ -248,23 +265,13 @@ async def produce_command(
         if not isinstance(message.payload, bytes):
             continue
         try:
-            payload = message.payload.decode("utf-8")
-        except UnicodeDecodeError:
-            logger.warning(
-                "Invalid encoded payload (topic=%s, payload=%s)",
-                message.topic.value,
-                message.payload,
-            )
-            continue
-        logger.debug("Received command from MQTT. (topic=%s)", message.topic.value)
-        try:
-            await command_queue.put(QueueCommand(device_uuid, payload))
+            await command_queue.put(CommandPayload(device_uuid, message.payload))
         except asyncio.QueueShutDown:
             logger.warning("Shutting down, command discarded.")
 
 
 async def consume_command(
-    command_queue: asyncio.Queue[QueueCommand],
+    command_queue: asyncio.Queue[CommandPayload],
     devices: dict[uuid.UUID, sesame5.Sesame5],
     history_name: str,
 ) -> None:
@@ -277,33 +284,44 @@ async def consume_command(
     """
     while True:
         try:
-            command = await command_queue.get()
+            command_payload = await command_queue.get()
         except asyncio.QueueShutDown:
             break
         try:
-            sesame = devices[command.device_uuid]
-        except KeyError:
-            logger.warning("Invalid Sesame specified (UUID=%s)", command.device_uuid)
-            command_queue.task_done()
-            continue
-        match command.payload:
-            case "LOCKED":
-                await sesame.lock(history_name)
-                logger.debug(
-                    "Send lock command to Sesame (UUID=%s)", command.device_uuid
-                )
-            case "UNLOCKED":
-                await sesame.unlock(history_name)
-                logger.debug(
-                    "Send unlock command to Sesame (UUID=%s)", command.device_uuid
-                )
-            case _:
+            sesame = devices.get(command_payload.device_uuid)
+            if sesame is None:
                 logger.warning(
-                    "Invalid command for Sesame (UUID=%s, command=%s)",
-                    command.device_uuid,
-                    command.payload,
+                    "Invalid Sesame specified (UUID=%s)", command_payload.device_uuid
                 )
-        command_queue.task_done()
+                continue
+            try:
+                command = command_payload.message.decode("utf-8")
+            except UnicodeDecodeError:
+                logger.warning(
+                    "Invalid encoded payload (UUID=%s)", command_payload.device_uuid
+                )
+                continue
+            match command:
+                case "LOCKED":
+                    await sesame.lock(history_name)
+                    logger.debug(
+                        "Send lock command to Sesame (UUID=%s)",
+                        command_payload.device_uuid,
+                    )
+                case "UNLOCKED":
+                    await sesame.unlock(history_name)
+                    logger.debug(
+                        "Send unlock command to Sesame (UUID=%s)",
+                        command_payload.device_uuid,
+                    )
+                case _:
+                    logger.warning(
+                        "Invalid command for Sesame (UUID=%s, command=%s)",
+                        command_payload.device_uuid,
+                        command,
+                    )
+        finally:
+            command_queue.task_done()
 
 
 async def runner(stop_event: asyncio.Event):
@@ -316,8 +334,8 @@ async def runner(stop_event: asyncio.Event):
     Args:
         stop_event: Event used to trigger shutdown of the application.
     """
-    status_queue: asyncio.Queue[QueueCommand] = asyncio.Queue()
-    command_queue: asyncio.Queue[QueueCommand] = asyncio.Queue()
+    status_queue: asyncio.Queue[StatusPayload] = asyncio.Queue()
+    command_queue: asyncio.Queue[CommandPayload] = asyncio.Queue()
     setup_signal_handlers(stop_event)
     history_name, mqtt_config, target_devices = load_config()
     async with contextlib.AsyncExitStack() as stack:
