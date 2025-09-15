@@ -181,7 +181,6 @@ async def setup_devices(
     devices = {}
     for address, key in target_devices:
         sesame = await stack.enter_async_context(sesame5.Sesame5(address, key))
-        assert sesame.sesame_advertisement_data is not None
         device_uuid = sesame.sesame_advertisement_data.device_uuid
         sesame.set_mech_status_callback(
             functools.partial(produce_status, status_queue, device_uuid)
