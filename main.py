@@ -31,10 +31,6 @@ logging.getLogger("gomalock").setLevel(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-class TerminateTaskGroup(Exception):
-    """Exception raised to terminate a task group."""
-
-
 class MqttConfig(NamedTuple):
     """Stores the configuration related to MQTT.
 
@@ -87,11 +83,6 @@ class StatusPayload(NamedTuple):
 
     device_uuid: uuid.UUID
     mech_status: sesame5.Sesame5MechStatus
-
-
-async def force_terminate_task_group():
-    """Used to force termination of a task group."""
-    raise TerminateTaskGroup()
 
 
 def load_config() -> tuple[str, MqttConfig, list[TargetDevice]]:
@@ -340,23 +331,23 @@ async def runner(stop_event: asyncio.Event):
     async with contextlib.AsyncExitStack() as stack:
         mqttc = await setup_mqtt(stack, mqtt_config)
         devices = await setup_devices(stack, target_devices, status_queue)
-        try:
-            async with asyncio.TaskGroup() as tg:
+        async with asyncio.TaskGroup() as tg:
+            tasks = [
                 tg.create_task(
                     consume_status(status_queue, mqttc, mqtt_config.base_topic)
-                )
-                tg.create_task(produce_command(command_queue, mqttc))
-                tg.create_task(consume_command(command_queue, devices, history_name))
-                logger.info("ssm2mqtt started and running.")
-                await stop_event.wait()
-                logger.debug("Shutdown signal received. Stopping tasks.")
-                status_queue.shutdown()
-                command_queue.shutdown()
-                await asyncio.wait_for(status_queue.join(), 20)
-                await asyncio.wait_for(command_queue.join(), 20)
-                tg.create_task(force_terminate_task_group())
-        except* TerminateTaskGroup:
-            pass
+                ),
+                tg.create_task(consume_command(command_queue, devices, history_name)),
+                tg.create_task(produce_command(command_queue, mqttc)),
+            ]
+            logger.info("ssm2mqtt started and running.")
+            await stop_event.wait()
+            logger.debug("Shutdown signal received. Stopping tasks.")
+            status_queue.shutdown()
+            command_queue.shutdown()
+            await asyncio.wait_for(status_queue.join(), 20)
+            await asyncio.wait_for(command_queue.join(), 20)
+            for task in tasks:
+                task.cancel()
     logger.info("ssm2mqtt shutdown complete.")
 
 
