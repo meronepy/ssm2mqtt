@@ -141,7 +141,7 @@ async def setup_mqtt(
             password=mqtt_config.password,
         )
     )
-    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set")
+    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set", 1)
     logger.info(
         "Connected to MQTT broker (host=%s, port=%d, base_topic=%s)",
         mqtt_config.host,
@@ -228,7 +228,7 @@ async def consume_status(
                 }
             )
             topic = f"{base_topic}/{status_payload.device_uuid}/get"
-            await mqttc.publish(topic, payload)
+            await mqttc.publish(topic, payload, 1)
             logger.debug("Published status to MQTT (topic=%s)", topic)
         finally:
             status_queue.task_done()
