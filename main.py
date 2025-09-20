@@ -11,7 +11,6 @@ import contextlib
 import functools
 import json
 import logging
-import os
 import signal
 import sys
 import uuid
@@ -20,10 +19,8 @@ from typing import NamedTuple
 import aiomqtt
 from gomalock import sesame5
 
-if sys.platform.lower() == "win32" or os.name.lower() == "nt":
-    from asyncio import WindowsSelectorEventLoopPolicy, set_event_loop_policy
-
-    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
@@ -136,7 +133,7 @@ async def setup_mqtt(
     Returns:
         An active MQTT client instance.
     """
-    mqtt = await stack.enter_async_context(
+    mqttc = await stack.enter_async_context(
         aiomqtt.Client(
             mqtt_config.host,
             mqtt_config.port,
@@ -144,14 +141,14 @@ async def setup_mqtt(
             password=mqtt_config.password,
         )
     )
-    await mqtt.subscribe(f"{mqtt_config.base_topic}/+/set")
+    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set")
     logger.info(
         "Connected to MQTT broker (host=%s, port=%d, base_topic=%s)",
         mqtt_config.host,
         mqtt_config.port,
         mqtt_config.base_topic,
     )
-    return mqtt
+    return mqttc
 
 
 async def setup_devices(
@@ -252,8 +249,7 @@ async def produce_command(
         except (IndexError, ValueError):
             logger.warning("Invalid topic format (topic=%s)", message.topic.value)
             continue
-        if not isinstance(message.payload, bytes):
-            continue
+        assert isinstance(message.payload, bytes)
         try:
             await command_queue.put(CommandPayload(device_uuid, message.payload))
         except asyncio.QueueShutDown:
