@@ -4,8 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-5da1d8)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%2F%20Windows%20%2F%20macOS-ffb8d2)
 
-Bluetooth Low EnergyでSesame 5デバイスとMQTTをブリッジするPythonスクリプト。
-
+Bluetooth Low EnergyでSesame 5デバイスとMQTTをブリッジするPythonスクリプト。  
 HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能にします。
 
 ---
@@ -19,51 +18,9 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 
 ## 使用方法
 
-### セサミの操作
-
-`ベーストピック/セサミのUUID/set`トピックに、`LOCKED`または`UNLOCKED`をパブリッシュすることで操作できます。
-
-セサミのUUIDは公式アプリまたは[後述の方法](#設定値の取得方法)で確認できます。
-
-施錠例
-
-```bash
-mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "LOCKED"
-```
-
-開錠例
-
-```bash
-mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "UNLOCKED"
-```
-
-### セサミの状態の受信
-
-`ベーストピック/セサミのUUID/get`トピックをサブスクライブすると取得できます。
-
-セサミの状態が変化するとリアルタイムでパブリッシュされます。手動で状態を取得することはできません。
-
-受信例
-
-```bash
-mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
-```
-
-デバイスの状態は以下のフォーマットでパブリッシュされます。
-
-```json
-{"position": -13, "lockCurrentState": "LOCKED", "batteryVoltage": 6.062, "batteryLevel": 100, "chargingState": "NOT_CHARGEABLE", "statusLowBattery": false}
-```
-
-`chargingState`は、定数であり`NOT_CHARGEABLE`から変化しません。homebridge-mqttthingなどで使用するための項目です。
-
----
-
-## 準備
-
 ### インストール手順 (Raspberry Pi OSの場合)
 
-1. GithubのReleasesから、最新の`ssm2mqtt.zip`をダウンロード。
+1. [GithubのReleases](https://github.com/meronepy/ssm2mqtt/releases)から、最新の`ssm2mqtt_x.x.x.zip`をダウンロード。
 
 2. zipファイルを展開、`/usr/local/bin/ssm2mqtt`に配置。
 
@@ -97,7 +54,7 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
     nano config.json
     ```
 
-以降は自動起動を設定する場合の追加の手順。
+以降は自動起動を設定する場合の追加の手順です。
 
 1. Serviceの作成と有効化。
 
@@ -119,6 +76,49 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
     ```bash
     /usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/main.py
     ```
+
+### セサミの操作
+
+`ベーストピック/セサミのUUID/set`トピックに、`LOCKED`または`UNLOCKED`をパブリッシュすることで操作できます。  
+セサミのUUIDは公式アプリまたは[後述の方法](#設定値の取得方法)で確認できます。
+
+施錠例
+
+```bash
+mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "LOCKED"
+```
+
+開錠例
+
+```bash
+mosquitto_pub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/set" -m "UNLOCKED"
+```
+
+### セサミの状態の受信
+
+`ベーストピック/セサミのUUID/get`トピックをサブスクライブすると取得できます。  
+セサミの状態が変化するとリアルタイムでパブリッシュされます。手動で状態を取得することはできません。
+
+受信例
+
+```bash
+mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
+```
+
+デバイスの状態は以下のフォーマットでパブリッシュされます。
+
+```json
+{
+    "position": -13,
+    "lockCurrentState": "LOCKED",
+    "batteryVoltage": 6.062,
+    "batteryLevel": 100,
+    "chargingState": "NOT_CHARGEABLE",
+    "statusLowBattery": false
+}
+```
+
+`chargingState`は、`NOT_CHARGEABLE`で固定です。homebridge-mqttthingなどで使用するための項目です。
 
 ---
 
@@ -167,15 +167,16 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 
 |キー|説明|
 |---|---|
-|history_name|操作履歴に表示する名前。|
+|history_name|操作履歴に表示する名前|
 |base_topic|ssm2mqttが使用する共通のルートトピック|
-|host|MQTTブローカーのIPアドレス。|
-|port|MQTTブローカーのポート。|
-|user|MQTTのユーザー名。空欄で無効。|
-|password|MQTTのパスワード。空欄で無効。|
-|devices|セサミのMACアドレスとシークレットキーのペア。|
+|host|MQTTブローカーのIPアドレス|
+|port|MQTTブローカーのポート|
+|user|MQTTのユーザー名, 空欄で無効|
+|password|MQTTのパスワード, 空欄で無効|
+|devices|セサミのMACアドレスとシークレットキーのペア|
 
-> `devices`には複数のセサミを設定できます。
+> `devices`には複数のセサミを設定できます。  
+> `base_topic`に`/`を含めることはできません。
 
 ---
 
@@ -188,8 +189,7 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 |⚠️|Sesame 5 USA|
 |❌|Sesame 4以前|
 
-Sesame 5 ProとSesame 5 USAは恐らく動作しますが、動作未確認です。
-
+Sesame 5 ProとSesame 5 USAは恐らく動作しますが、動作未確認です。  
 Sesame 4以前はOSが違うため動作しません。対応予定もありません。
 
 ---
@@ -205,11 +205,7 @@ Sesame 4以前はOSが違うため動作しません。対応予定もありま�
 ## 注意事項
 
 - Linuxで動作させる場合、 **BlueZ 5.82以降を強く推奨します。** Raspberry Pi OS Bookwormにインストール済みのBlueZ 5.66では、バグによってSesame 5のGATT Serviceが取得できず正常に動作しません。BlueZ 5.68で修正済みですが、Raspberry Pi OS TrixieにアップグレードしてBlueZ 5.82を使用するのが最も簡単で確実です。
-
 - Python 3.13以降が必要です。
-
 - macOS環境でも動作すると思われますが、動作未確認です。
-
 - 複数のセサミと接続できる設計ですが、1台しか持っていないため実機での動作は未確認です。
-
 - このスクリプトは、[gomalock](https://github.com/meronepy/gomalock)ライブラリの動作確認を目的として作成されています。BLE通信は暗号化されていますが、MQTTとは平文で通信します。ユーザーとパスワード認証を使用することもできますが、それでもセキュリティリスクが生じます。また、動作保証もありません。自己責任でご使用ください。
