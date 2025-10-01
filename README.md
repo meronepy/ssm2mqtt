@@ -20,7 +20,7 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 
 ### インストール手順 (Raspberry Pi OSの場合)
 
-1. [GithubのReleases](https://github.com/meronepy/ssm2mqtt/releases)から、最新の`ssm2mqtt_x.x.x.zip`をダウンロード。
+1. Githubの[Releases](https://github.com/meronepy/ssm2mqtt/releases)から、最新の`ssm2mqtt_x.x.x.zip`をダウンロード。
 
 2. zipファイルを展開、`/usr/local/bin/ssm2mqtt`に配置。
 
