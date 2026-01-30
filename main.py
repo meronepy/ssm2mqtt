@@ -249,7 +249,6 @@ async def produce_command(
         except (IndexError, ValueError):
             logger.warning("Invalid topic format (topic=%s)", message.topic.value)
             continue
-        assert isinstance(message.payload, bytes)
         try:
             await command_queue.put(CommandPayload(device_uuid, message.payload))
         except asyncio.QueueShutDown:
