@@ -1,9 +1,7 @@
 """MQTT to Sesame 5 bridge for lock control and status reporting.
 
-This module connects to a set of Sesame smart locks over Bluetooth using the gomalock
-library, and integrates them with an MQTT broker. It listens for lock/unlock commands
-via MQTT, forwards them to the appropriate devices, and publishes status updates back
-to MQTT topics.
+This module connects to a set of Sesame smart locks over Bluetooth
+and integrates them with an MQTT broker.
 """
 
 import asyncio
@@ -17,7 +15,7 @@ import uuid
 from typing import NamedTuple
 
 import aiomqtt
-from gomalock import sesame5
+from gomalock.sesame5 import Sesame5, Sesame5MechStatus
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -28,17 +26,7 @@ logging.getLogger("gomalock").setLevel(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-class MqttConfig(NamedTuple):
-    """Stores the configuration related to MQTT.
-
-    Attributes:
-        base_topic: Topic prefix used for publishing and subscribing.
-        host: IP address of the MQTT broker.
-        port: Port of the MQTT broker.
-        user: MQTT username if using authentication.
-        password: MQTT password if using authentication.
-    """
-
+class _MqttConfig(NamedTuple):
     base_topic: str
     host: str
     port: int
@@ -46,93 +34,53 @@ class MqttConfig(NamedTuple):
     password: str | None
 
 
-class TargetDevice(NamedTuple):
-    """Stores the information of the target device.
-
-    Attributes:
-        mac_address: MAC address of Sesame device.
-        secret_key: Secret key of Sesame device.
-    """
-
-    mac_address: str
+class _TargetDevice(NamedTuple):
+    address: str
     secret_key: str
 
 
-class CommandPayload(NamedTuple):
-    """Data structure to use for command.
-
-    Attributes:
-        device_uuid: UUID specifying the desired device.
-        message: Received message.
-    """
-
+class _StatusPayload(NamedTuple):
     device_uuid: uuid.UUID
-    message: bytes
+    mech_status: Sesame5MechStatus
 
 
-class StatusPayload(NamedTuple):
-    """Data structure to use for status.
-
-    Attributes:
-        device_uuid: UUID specifying the desired device.
-        mech_status: Sesame 5 mechanical status.
-    """
-
+class _ControlPayload(NamedTuple):
     device_uuid: uuid.UUID
-    mech_status: sesame5.Sesame5MechStatus
+    command: bytes
 
 
-def load_config() -> tuple[str, MqttConfig, list[TargetDevice]]:
-    """Loads configuration from `config.json`.
-
-    Returns:
-        A tuple containing the name used for history logging,
-        MQTT connection settings, List of configured target devices.
-    """
+def _load_config() -> tuple[str, _MqttConfig, list[_TargetDevice]]:
     with open("config.json", "r", encoding="utf8") as f:
         user_config = json.load(f)
         history_name: str = user_config["history_name"]
-        mqtt_config = MqttConfig(
-            user_config["mqtt"]["base_topic"],
-            user_config["mqtt"]["host"],
-            user_config["mqtt"]["port"],
-            user_config["mqtt"]["user"] or None,
-            user_config["mqtt"]["password"] or None,
+        mqtt = user_config["mqtt"]
+        mqtt_config = _MqttConfig(
+            mqtt["base_topic"],
+            mqtt["host"],
+            mqtt["port"],
+            mqtt.get("user"),
+            mqtt.get("password"),
         )
         target_devices = [
-            TargetDevice(address, key)
-            for address, key in user_config["devices"].items()
+            _TargetDevice(address, secret_key)
+            for address, secret_key in user_config["devices"].items()
         ]
     return history_name, mqtt_config, target_devices
 
 
-def setup_signal_handlers(event: asyncio.Event) -> None:
-    """Registers signal handlers to set the given event on termination signals.
-
-    Args:
-        event: The event to set when SIGINT or SIGTERM is received.
-    """
+def _setup_signal_handlers(stop_event: asyncio.Event) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
-            asyncio.get_running_loop().add_signal_handler(sig, event.set)
+            asyncio.get_running_loop().add_signal_handler(sig, stop_event.set)
         except NotImplementedError:
             logger.warning(
-                "Signal handlers for %s are not supported on this platform.", sig
+                "Signal handlers for %s are not supported on this platform", sig
             )
 
 
-async def setup_mqtt(
-    stack: contextlib.AsyncExitStack, mqtt_config: MqttConfig
+async def _configure_mqttc(
+    stack: contextlib.AsyncExitStack, mqtt_config: _MqttConfig
 ) -> aiomqtt.Client:
-    """Connects to the MQTT broker and subscribes to command topics.
-
-    Args:
-        stack: Async context manager stack for cleanup.
-        mqtt_config: MQTT connection settings.
-
-    Returns:
-        An active MQTT client instance.
-    """
     mqttc = await stack.enter_async_context(
         aiomqtt.Client(
             mqtt_config.host,
@@ -143,7 +91,7 @@ async def setup_mqtt(
     )
     await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set", 1)
     logger.info(
-        "Connected to MQTT broker (host=%s, port=%d, base_topic=%s)",
+        "Connected to MQTT broker [host: %s, port: %d, base_topic: %s]",
         mqtt_config.host,
         mqtt_config.port,
         mqtt_config.base_topic,
@@ -151,212 +99,152 @@ async def setup_mqtt(
     return mqttc
 
 
-async def setup_devices(
+async def _configure_sesame(
     stack: contextlib.AsyncExitStack,
-    target_devices: list[TargetDevice],
-    status_queue: asyncio.Queue[StatusPayload],
-) -> dict[uuid.UUID, sesame5.Sesame5]:
-    """Initializes and connects to Sesame devices, registering status callbacks.
-
-    Args:
-        stack: Async context manager stack for cleanup.
-        target_devices: List of target devices to connect.
-        status_queue: Queue to send status updates.
-
-    Returns:
-        Mapping of device UUIDs to connected Sesame instances.
-    """
-    devices = {}
-    for address, key in target_devices:
-        sesame = await stack.enter_async_context(sesame5.Sesame5(address, key))
-        device_uuid = sesame.sesame_advertisement_data.device_uuid
-        sesame.set_mech_status_callback(
-            functools.partial(produce_status, status_queue, device_uuid)
+    status_queue: asyncio.Queue[_StatusPayload],
+    target_devices: list[_TargetDevice],
+) -> dict[uuid.UUID, Sesame5]:
+    connected_devices = {}
+    for address, secret_key in target_devices:
+        sesame = await stack.enter_async_context(Sesame5(address, secret_key))
+        sesame.register_mech_status_callback(
+            functools.partial(_produce_status, status_queue)
         )
-        devices[device_uuid] = sesame
-        logger.info("Connected to Sesame (UUID=%s)", device_uuid)
-    return devices
+        device_uuid = sesame.sesame_advertisement_data.device_uuid
+        connected_devices[device_uuid] = sesame
+        logger.info("Connected to Sesame device [UUID: %s]", device_uuid)
+    return connected_devices
 
 
-def produce_status(
-    status_queue: asyncio.Queue[StatusPayload],
-    device_uuid: uuid.UUID,
-    mech_status: sesame5.Sesame5MechStatus,
+def _produce_status(
+    queue: asyncio.Queue[_StatusPayload],
+    sesame: Sesame5,
+    status: Sesame5MechStatus,
 ) -> None:
-    """Formats device mechanical status and enqueues it for processing.
-
-    Args:
-        status_queue: Queue to send status.
-        device_uuid: UUID of the device.
-        mech_status: Mechanical status of the device.
-    """
-    logger.debug("Received status update from Sesame (UUID=%s)", device_uuid)
+    payload = _StatusPayload(sesame.sesame_advertisement_data.device_uuid, status)
     try:
-        status_queue.put_nowait(StatusPayload(device_uuid, mech_status))
+        queue.put_nowait(payload)
     except asyncio.QueueShutDown:
-        logger.warning("Shutting down, status discarded.")
+        logger.warning("Shutting down, status discarded")
 
 
-async def consume_status(
-    status_queue: asyncio.Queue[StatusPayload], mqttc: aiomqtt.Client, base_topic: str
+async def _consume_status(
+    queue: asyncio.Queue[_StatusPayload], mqttc: aiomqtt.Client, base_topic: str
 ) -> None:
-    """Continuously consumes status updates from the queue and publishes them to MQTT.
-
-    Args:
-        status_queue: Queue containing status.
-        mqttc: MQTT client used to publish messages.
-        base_topic: Topic prefix for MQTT publishing.
-    """
     while True:
         try:
-            status_payload = await status_queue.get()
+            status = await queue.get()
         except asyncio.QueueShutDown:
             break
         try:
             payload = json.dumps(
                 {
-                    "position": status_payload.mech_status.position,
+                    "position": status.mech_status.position,
                     "lockCurrentState": (
-                        "LOCKED"
-                        if status_payload.mech_status.is_in_lock_range
-                        else "UNLOCKED"
+                        "LOCKED" if status.mech_status.is_in_lock_range else "UNLOCKED"
                     ),
-                    "batteryVoltage": status_payload.mech_status.battery_voltage,
-                    "batteryLevel": status_payload.mech_status.battery_percentage,
+                    "batteryVoltage": status.mech_status.battery_voltage,
+                    "batteryLevel": status.mech_status.battery_percentage,
                     "chargingState": "NOT_CHARGEABLE",
-                    "statusLowBattery": status_payload.mech_status.is_battery_critical,
+                    "statusLowBattery": status.mech_status.is_battery_critical,
                 }
             )
-            topic = f"{base_topic}/{status_payload.device_uuid}/get"
-            await mqttc.publish(topic, payload, 1)
-            logger.debug("Published status to MQTT (topic=%s)", topic)
+            await mqttc.publish(f"{base_topic}/{status.device_uuid}/get", payload, 1)
+            logger.debug("Published status to MQTT [UUID: %s]", status.device_uuid)
         finally:
-            status_queue.task_done()
+            queue.task_done()
 
 
-async def produce_command(
-    command_queue: asyncio.Queue[CommandPayload], mqttc: aiomqtt.Client
+async def _produce_control(
+    queue: asyncio.Queue[_ControlPayload], mqttc: aiomqtt.Client
 ) -> None:
-    """Listens for incoming MQTT messages and enqueues valid commands.
-
-    Args:
-        command_queue: Queue to place parsed commands into.
-        mqttc: MQTT client used to receive messages.
-    """
     async for message in mqttc.messages:
         try:
             device_uuid = uuid.UUID(message.topic.value.split("/")[1])
         except (IndexError, ValueError):
-            logger.warning("Invalid topic format (topic=%s)", message.topic.value)
+            logger.warning("Invalid topic format [topic: %s]", message.topic.value)
             continue
         try:
-            await command_queue.put(CommandPayload(device_uuid, message.payload))
+            await queue.put(_ControlPayload(device_uuid, message.payload))
         except asyncio.QueueShutDown:
-            logger.warning("Shutting down, command discarded.")
+            logger.warning("Shutting down, command discarded")
 
 
-async def consume_command(
-    command_queue: asyncio.Queue[CommandPayload],
-    devices: dict[uuid.UUID, sesame5.Sesame5],
+async def _consume_control(
+    queue: asyncio.Queue[_ControlPayload],
+    connected_devices: dict[uuid.UUID, Sesame5],
     history_name: str,
 ) -> None:
-    """Consumes commands from the queue and sends them to the appropriate Sesame device.
-
-    Args:
-        command_queue: Queue containing commands to execute.
-        devices: Mapping of device UUIDs to Sesame instances.
-        history_name: Name used for history when sending commands.
-    """
     while True:
         try:
-            command_payload = await command_queue.get()
+            control = await queue.get()
         except asyncio.QueueShutDown:
             break
         try:
-            sesame = devices.get(command_payload.device_uuid)
+            sesame = connected_devices.get(control.device_uuid)
             if sesame is None:
                 logger.warning(
-                    "Invalid Sesame specified (UUID=%s)", command_payload.device_uuid
+                    "Invalid Sesame specified [UUID: %s]", control.device_uuid
                 )
                 continue
             try:
-                command = command_payload.message.decode("utf-8")
+                command_str = control.command.decode("utf-8")
             except UnicodeDecodeError:
                 logger.warning(
-                    "Invalid encoded payload (UUID=%s)", command_payload.device_uuid
+                    "Invalid encoded payload [UUID: %s]", control.device_uuid
                 )
                 continue
-            match command:
+            match command_str:
                 case "LOCKED":
                     await sesame.lock(history_name)
                     logger.debug(
-                        "Send lock command to Sesame (UUID=%s)",
-                        command_payload.device_uuid,
+                        "Send lock command to Sesame [UUID: %s]",
+                        control.device_uuid,
                     )
                 case "UNLOCKED":
                     await sesame.unlock(history_name)
                     logger.debug(
-                        "Send unlock command to Sesame (UUID=%s)",
-                        command_payload.device_uuid,
+                        "Send unlock command to Sesame [UUID: %s]",
+                        control.device_uuid,
                     )
                 case _:
                     logger.warning(
-                        "Invalid command for Sesame (UUID=%s, command=%s)",
-                        command_payload.device_uuid,
-                        command,
+                        "Invalid command for Sesame [UUID: %s, command: %s]",
+                        control.device_uuid,
+                        command_str,
                     )
         finally:
-            command_queue.task_done()
+            queue.task_done()
 
 
-async def runner(stop_event: asyncio.Event):
-    """Main async runner that initializes components and starts background tasks.
-
-    Sets up MQTT connection, connects to devices, and launches tasks for handling
-    incoming commands and outgoing status updates. Waits for a stop event to initiate
-    graceful shutdown.
-
-    Args:
-        stop_event: Event used to trigger shutdown of the application.
-    """
-    status_queue: asyncio.Queue[StatusPayload] = asyncio.Queue()
-    command_queue: asyncio.Queue[CommandPayload] = asyncio.Queue()
-    setup_signal_handlers(stop_event)
-    history_name, mqtt_config, target_devices = load_config()
-    async with contextlib.AsyncExitStack() as stack:
-        mqttc = await setup_mqtt(stack, mqtt_config)
-        devices = await setup_devices(stack, target_devices, status_queue)
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(
-                    consume_status(status_queue, mqttc, mqtt_config.base_topic)
-                ),
-                tg.create_task(consume_command(command_queue, devices, history_name)),
-                tg.create_task(produce_command(command_queue, mqttc)),
-            ]
-            logger.info("ssm2mqtt started and running.")
-            await stop_event.wait()
-            logger.debug("Shutdown signal received. Stopping tasks.")
-            status_queue.shutdown()
-            command_queue.shutdown()
-            await asyncio.wait_for(status_queue.join(), 20)
-            await asyncio.wait_for(command_queue.join(), 20)
-            for task in tasks:
-                task.cancel()
-    logger.info("ssm2mqtt shutdown complete.")
-
-
-def main():
-    """Entry point for the application.
-
-    Runs the main async runner and handles graceful shutdown on keyboard interrupt.
-    """
+async def main() -> None:
+    """Main entry point for ssm2mqtt application."""
     stop_event = asyncio.Event()
-    try:
-        asyncio.run(runner(stop_event))
-    except KeyboardInterrupt:
-        stop_event.set()
+    status_queue: asyncio.Queue[_StatusPayload] = asyncio.Queue()
+    control_queue: asyncio.Queue[_ControlPayload] = asyncio.Queue()
+
+    _setup_signal_handlers(stop_event)
+    history_name, mqtt_config, target_devices = _load_config()
+
+    async with contextlib.AsyncExitStack() as stack:
+        mqttc = await _configure_mqttc(stack, mqtt_config)
+        connected_devices = await _configure_sesame(stack, status_queue, target_devices)
+        tg = await stack.enter_async_context(asyncio.TaskGroup())
+
+        tg.create_task(_consume_status(status_queue, mqttc, mqtt_config.base_topic))
+        tg.create_task(_consume_control(control_queue, connected_devices, history_name))
+        produce_control_task = tg.create_task(_produce_control(control_queue, mqttc))
+        logger.info("ssm2mqtt is running")
+
+        await stop_event.wait()
+        logger.info("Shutting down ssm2mqtt")
+        produce_control_task.cancel()
+        status_queue.shutdown()
+        control_queue.shutdown()
+        await asyncio.wait_for(status_queue.join(), timeout=10)
+        await asyncio.wait_for(control_queue.join(), timeout=10)
+    logger.info("smm2mqtt has been shut down")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
