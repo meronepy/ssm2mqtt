@@ -68,7 +68,7 @@ def _load_config() -> tuple[str, _MqttConfig, list[_TargetDevice]]:
     return history_name, mqtt_config, target_devices
 
 
-def _setup_signal_handlers(stop_event: asyncio.Event) -> None:
+def _configure_signal_handlers(stop_event: asyncio.Event) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             asyncio.get_running_loop().add_signal_handler(sig, stop_event.set)
@@ -223,7 +223,7 @@ async def main() -> None:
     status_queue: asyncio.Queue[_StatusPayload] = asyncio.Queue()
     control_queue: asyncio.Queue[_ControlPayload] = asyncio.Queue()
 
-    _setup_signal_handlers(stop_event)
+    _configure_signal_handlers(stop_event)
     history_name, mqtt_config, target_devices = _load_config()
 
     async with contextlib.AsyncExitStack() as stack:
