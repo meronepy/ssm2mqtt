@@ -106,9 +106,10 @@ async def _configure_sesame(
 ) -> dict[uuid.UUID, Sesame5]:
     connected_devices = {}
     for address, secret_key in target_devices:
-        sesame = await stack.enter_async_context(Sesame5(address, secret_key))
-        sesame.register_mech_status_callback(
-            functools.partial(_produce_status, status_queue)
+        sesame = await stack.enter_async_context(
+            Sesame5(
+                address, secret_key, functools.partial(_produce_status, status_queue)
+            )
         )
         device_uuid = sesame.sesame_advertisement_data.device_uuid
         connected_devices[device_uuid] = sesame
