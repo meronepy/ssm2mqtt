@@ -244,7 +244,7 @@ async def main() -> None:
         control_queue.shutdown()
         await asyncio.wait_for(status_queue.join(), timeout=10)
         await asyncio.wait_for(control_queue.join(), timeout=10)
-    logger.info("smm2mqtt has been shut down")
+    logger.info("ssm2mqtt has been shut down")
 
 
 if __name__ == "__main__":
