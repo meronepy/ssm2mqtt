@@ -6,8 +6,5 @@ readme = "README.md"
 requires-python = ">=3.13, <3.14"
 dependencies = [
     "aiomqtt>=2.5.0",
-    "gomalock",
+    "gomalock>=1.0.1",
 ]
-
-[tool.uv.sources]
-gomalock = { git = "https://github.com/meronepy/gomalock.git", rev = "v1.0.0" }
