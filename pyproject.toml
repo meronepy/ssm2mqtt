@@ -3,8 +3,8 @@ name = "ssm2mqtt"
 version = "0.2.4"
 description = "MQTT to Sesame 5 bridge for lock control and status reporting"
 readme = "README.md"
-requires-python = ">=3.13, <3.14"
+requires-python = ">=3.13"
 dependencies = [
-    "aiomqtt>=2.5.0",
+    "aiomqtt==3.0.0a1",
     "gomalock>=1.0.1",
 ]
