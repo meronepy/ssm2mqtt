@@ -91,7 +91,7 @@ async def _configure_mqttc(
     )
     await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set", 1)
     logger.info(
-        "Connected to MQTT broker [host: %s, port: %d, base_topic: %s]",
+        "Connected to MQTT broker [host=%s, port=%d, base_topic=%s]",
         mqtt_config.host,
         mqtt_config.port,
         mqtt_config.base_topic,
@@ -113,7 +113,7 @@ async def _configure_sesame(
         )
         device_uuid = sesame.sesame_advertisement_data.device_uuid
         connected_devices[device_uuid] = sesame
-        logger.info("Connected to Sesame device [UUID: %s]", device_uuid)
+        logger.info("Connected to Sesame device [UUID=%s]", device_uuid)
     return connected_devices
 
 
@@ -185,32 +185,32 @@ async def _consume_control(
             sesame = connected_devices.get(control.device_uuid)
             if sesame is None:
                 logger.warning(
-                    "Invalid Sesame specified [UUID: %s]", control.device_uuid
+                    "Invalid Sesame specified [UUID=%s]", control.device_uuid
                 )
                 continue
             try:
                 command_str = control.command.decode("utf-8")
             except UnicodeDecodeError:
                 logger.warning(
-                    "Invalid encoded payload [UUID: %s]", control.device_uuid
+                    "Invalid encoded payload [UUID=%s]", control.device_uuid
                 )
                 continue
             match command_str:
                 case "LOCKED":
                     await sesame.lock(history_name)
                     logger.debug(
-                        "Send lock command to Sesame [UUID: %s]",
+                        "Send lock command to Sesame [UUID=%s]",
                         control.device_uuid,
                     )
                 case "UNLOCKED":
                     await sesame.unlock(history_name)
                     logger.debug(
-                        "Send unlock command to Sesame [UUID: %s]",
+                        "Send unlock command to Sesame [UUID=%s]",
                         control.device_uuid,
                     )
                 case _:
                     logger.warning(
-                        "Invalid command for Sesame [UUID: %s, command: %s]",
+                        "Invalid command for Sesame [UUID=%s, command=%s]",
                         control.device_uuid,
                         command_str,
                     )
