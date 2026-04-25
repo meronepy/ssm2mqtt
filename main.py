@@ -10,15 +10,11 @@ import functools
 import json
 import logging
 import signal
-import sys
 import uuid
 from typing import NamedTuple
 
 import aiomqtt
 from gomalock.sesame5 import Sesame5, Sesame5MechStatus
-
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
@@ -31,7 +27,7 @@ class _MqttConfig(NamedTuple):
     host: str
     port: int
     user: str | None
-    password: str | None
+    password: bytes | None
 
 
 class _TargetDevice(NamedTuple):
@@ -53,13 +49,16 @@ def _load_config() -> tuple[str, _MqttConfig, list[_TargetDevice]]:
     with open("config.json", "r", encoding="utf8") as f:
         user_config = json.load(f)
         history_name: str = user_config["history_name"]
-        mqtt = user_config["mqtt"]
+        mqtt: dict = user_config["mqtt"]
+        password = mqtt.get("password")
+        if isinstance(password, str):
+            password = password.encode("utf-8")
         mqtt_config = _MqttConfig(
             mqtt["base_topic"],
             mqtt["host"],
             mqtt["port"],
             mqtt.get("user"),
-            mqtt.get("password"),
+            password,
         )
         target_devices = [
             _TargetDevice(address, secret_key)
@@ -83,13 +82,13 @@ async def _configure_mqttc(
 ) -> aiomqtt.Client:
     mqttc = await stack.enter_async_context(
         aiomqtt.Client(
-            mqtt_config.host,
-            mqtt_config.port,
+            hostname=mqtt_config.host,
+            port=mqtt_config.port,
             username=mqtt_config.user,
             password=mqtt_config.password,
         )
     )
-    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set", 1)
+    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set")
     logger.info(
         "Connected to MQTT broker [host=%s, port=%d, base_topic=%s]",
         mqtt_config.host,
@@ -149,9 +148,9 @@ async def _consume_status(
                     "chargingState": "NOT_CHARGEABLE",
                     "statusLowBattery": status.mech_status.is_battery_critical,
                 }
-            )
-            await mqttc.publish(f"{base_topic}/{status.device_uuid}/get", payload, 1)
-            logger.debug("Published status to MQTT [UUID: %s]", status.device_uuid)
+            ).encode("utf-8")
+            await mqttc.publish(f"{base_topic}/{status.device_uuid}/get", payload)
+            logger.debug("Published status to MQTT [UUID=%s]", status.device_uuid)
         finally:
             queue.task_done()
 
@@ -159,11 +158,13 @@ async def _consume_status(
 async def _produce_control(
     queue: asyncio.Queue[_ControlPayload], mqttc: aiomqtt.Client
 ) -> None:
-    async for message in mqttc.messages:
+    async for message in mqttc.messages():
+        if not isinstance(message, aiomqtt.PublishPacket):
+            continue
         try:
-            device_uuid = uuid.UUID(message.topic.value.split("/")[1])
+            device_uuid = uuid.UUID(message.topic.split("/")[1])
         except (IndexError, ValueError):
-            logger.warning("Invalid topic format [topic: %s]", message.topic.value)
+            logger.warning("Invalid topic format [topic=%s]", message.topic)
             continue
         try:
             await queue.put(_ControlPayload(device_uuid, message.payload))
@@ -191,9 +192,7 @@ async def _consume_control(
             try:
                 command_str = control.command.decode("utf-8")
             except UnicodeDecodeError:
-                logger.warning(
-                    "Invalid encoded payload [UUID=%s]", control.device_uuid
-                )
+                logger.warning("Invalid encoded payload [UUID=%s]", control.device_uuid)
                 continue
             match command_str:
                 case "LOCKED":
