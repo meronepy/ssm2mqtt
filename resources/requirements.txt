@@ -1,2 +1,2 @@
-aiomqtt==2.5.1
+aiomqtt==3.0.0a1
 gomalock==1.0.1

@@ -5,8 +5,8 @@ After=network-online.target bluetooth.target
 
 [Service]
 Type=simple
-WorkingDirectory=/usr/local/bin/ssm2mqtt
-ExecStart=/usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/main.py
+WorkingDirectory=/opt/ssm2mqtt
+ExecStart=/opt/ssm2mqtt/.venv/bin/python /opt/ssm2mqtt/main.py
 Restart=always
 
 [Install]

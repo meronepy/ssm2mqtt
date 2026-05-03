@@ -21,41 +21,35 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 
 ### インストール手順 (Raspberry Pi OSの場合)
 
-1. gitをインストール
+1. Githubの[Releases](https://github.com/meronepy/ssm2mqtt/releases)から、最新の`ssm2mqtt_x.x.x.zip`をダウンロード
 
-    ```bash
-    sudo apt install git
-    ```
-
-2. Githubの[Releases](https://github.com/meronepy/ssm2mqtt/releases)から、最新の`ssm2mqtt_x.x.x.zip`をダウンロード
-
-3. zipファイルを展開、`/usr/local/bin/ssm2mqtt`に配置
+2. zipファイルを展開、`/opt/ssm2mqtt`に配置
 
     ```bash
     unzip "ssm2mqtt*.zip"
-    sudo cp -r ssm2mqtt /usr/local/bin/ssm2mqtt
+    sudo cp -r ssm2mqtt /opt/ssm2mqtt
     ```
 
-4. ファイルの所有者を変更
+3. ファイルの所有者を変更
 
     ```bash
-    sudo chown -R ${USER}: /usr/local/bin/ssm2mqtt
+    sudo chown -R ${USER}: /opt/ssm2mqtt
     ```
 
-5. 仮想環境を構築
+4. 仮想環境を構築
 
     ```bash
-    cd /usr/local/bin/ssm2mqtt
+    cd /opt/ssm2mqtt
     python -m venv .venv
     ```
 
-6. バックエンドのライブラリをインストール
+5. バックエンドのライブラリをインストール
 
      ```bash
      .venv/bin/pip install -r requirements.txt
      ```
 
-7. `config.json`を編集
+6. `config.json`を編集
 
     ```bash
     nano config.json
@@ -81,7 +75,7 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
 - 自動起動を設定していない場合
 
     ```bash
-    /usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/main.py
+    /opt/ssm2mqtt/.venv/bin/python /opt/ssm2mqtt/main.py
     ```
 
 ### セサミの操作
@@ -139,13 +133,18 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 - セサミ公式アプリのUUIDと比較して、目的のセサミのMACアドレスを取得してください。
 
     ```shell-session
-    $ /usr/local/bin/ssm2mqtt/.venv/bin/python /usr/local/bin/ssm2mqtt/discover.py
-    Address    : XX:XX:XX:XX:XX:XX
-    Model      : Sesame 5
-    Name       : None
-    RSSI       : -88
+    $ /opt/ssm2mqtt/.venv/bin/python /opt/ssm2mqtt/discover.py
+    --------------------------------------------------
+    Address    : AB:CD:EF:12:34:56
+    Model      : SESAME5
     Registered : True
     UUID       : 12345678-90ab-cdef-1234-567890abcdef
+    --------------------------------------------------
+    Address    : 12:34:56:AB:CD:EF
+    Model      : SESAME5_PRO
+    Registered : True
+    UUID       : abcdef12-3456-7890-abcd-ef1234567890
+    --------------------------------------------------
     ```
 
 - シークレットキーはmochipon様作成の[QR Code Reader for SESAME](https://sesame-qr-reader.vercel.app/)を使用して、マネージャー権限以上のQRコードから抽出できます。
