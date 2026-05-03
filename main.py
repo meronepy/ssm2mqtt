@@ -88,7 +88,9 @@ async def _configure_mqttc(
             password=mqtt_config.password,
         )
     )
-    await mqttc.subscribe(f"{mqtt_config.base_topic}/+/set")
+    await mqttc.subscribe(
+        f"{mqtt_config.base_topic}/+/set", max_qos=aiomqtt.QoS.AT_LEAST_ONCE
+    )
     logger.info(
         "Connected to MQTT broker [host=%s, port=%d, base_topic=%s]",
         mqtt_config.host,
@@ -149,7 +151,21 @@ async def _consume_status(
                     "statusLowBattery": status.mech_status.is_battery_critical,
                 }
             ).encode("utf-8")
-            await mqttc.publish(f"{base_topic}/{status.device_uuid}/get", payload)
+            is_duplicate = False
+            packet_id = next(mqttc.packet_ids)
+            while True:
+                try:
+                    await mqttc.publish(
+                        f"{base_topic}/{status.device_uuid}/get",
+                        payload,
+                        qos=aiomqtt.QoS.AT_LEAST_ONCE,
+                        packet_id=packet_id,
+                        duplicate=is_duplicate,
+                    )
+                    break
+                except aiomqtt.ConnectError:
+                    is_duplicate = True
+                    await mqttc.connected()
             logger.debug("Published status to MQTT [UUID=%s]", status.device_uuid)
         finally:
             queue.task_done()
@@ -159,8 +175,15 @@ async def _produce_control(
     queue: asyncio.Queue[_ControlPayload], mqttc: aiomqtt.Client
 ) -> None:
     async for message in mqttc.messages():
+        # Handle messages up to QoS 1; QoS 2 messages are treated as QoS 1 by aiomqtt.
         if not isinstance(message, aiomqtt.PublishPacket):
             continue
+        print(message.qos)
+        if message.qos == aiomqtt.QoS.AT_LEAST_ONCE:
+            # aiomqtt guarantees packet_id is an int when QoS is 1 or 2.
+            if not isinstance(message.packet_id, int):
+                continue
+            await mqttc.puback(message.packet_id)
         try:
             device_uuid = uuid.UUID(message.topic.split("/")[1])
         except (IndexError, ValueError):
