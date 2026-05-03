@@ -178,7 +178,6 @@ async def _produce_control(
         # Handle messages up to QoS 1; QoS 2 messages are treated as QoS 1 by aiomqtt.
         if not isinstance(message, aiomqtt.PublishPacket):
             continue
-        print(message.qos)
         if message.qos == aiomqtt.QoS.AT_LEAST_ONCE:
             # aiomqtt guarantees packet_id is an int when QoS is 1 or 2.
             if not isinstance(message.packet_id, int):
