@@ -14,11 +14,12 @@ import uuid
 from typing import NamedTuple
 
 import aiomqtt
-from gomalock.sesame5 import Sesame5, Sesame5MechStatus
+import gomalock
+from gomalock.exc import SesameConnectionError
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
-logging.getLogger("gomalock").setLevel(level=logging.WARNING)
+logging.getLogger("gomalock").setLevel(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +38,7 @@ class _TargetDevice(NamedTuple):
 
 class _StatusPayload(NamedTuple):
     device_uuid: uuid.UUID
-    mech_status: Sesame5MechStatus
+    mech_status: gomalock.Sesame5MechStatus
 
 
 class _ControlPayload(NamedTuple):
@@ -86,6 +87,7 @@ async def _configure_mqttc(
             port=mqtt_config.port,
             username=mqtt_config.user,
             password=mqtt_config.password,
+            reconnect=True,
         )
     )
     await mqttc.subscribe(
@@ -104,12 +106,12 @@ async def _configure_sesame(
     stack: contextlib.AsyncExitStack,
     status_queue: asyncio.Queue[_StatusPayload],
     target_devices: list[_TargetDevice],
-) -> dict[uuid.UUID, Sesame5]:
+) -> dict[uuid.UUID, gomalock.Sesame5]:
     connected_devices = {}
     for address, secret_key in target_devices:
         sesame = await stack.enter_async_context(
-            Sesame5(
-                address, secret_key, functools.partial(_produce_status, status_queue)
+            gomalock.Sesame5(
+                address, secret_key, functools.partial(_produce_status, status_queue), 5
             )
         )
         device_uuid = sesame.sesame_advertisement_data.device_uuid
@@ -120,8 +122,8 @@ async def _configure_sesame(
 
 def _produce_status(
     queue: asyncio.Queue[_StatusPayload],
-    sesame: Sesame5,
-    status: Sesame5MechStatus,
+    sesame: gomalock.Sesame5,
+    status: gomalock.Sesame5MechStatus,
 ) -> None:
     payload = _StatusPayload(sesame.sesame_advertisement_data.device_uuid, status)
     try:
@@ -197,7 +199,7 @@ async def _produce_control(
 
 async def _consume_control(
     queue: asyncio.Queue[_ControlPayload],
-    connected_devices: dict[uuid.UUID, Sesame5],
+    connected_devices: dict[uuid.UUID, gomalock.Sesame5],
     history_name: str,
 ) -> None:
     while True:
@@ -219,17 +221,29 @@ async def _consume_control(
                 continue
             match command_str:
                 case "LOCKED":
-                    await sesame.lock(history_name)
-                    logger.debug(
-                        "Send lock command to Sesame [UUID=%s]",
-                        control.device_uuid,
-                    )
+                    try:
+                        await sesame.lock(history_name)
+                        logger.debug(
+                            "Send lock command to Sesame [UUID=%s]",
+                            control.device_uuid,
+                        )
+                    except (asyncio.TimeoutError, SesameConnectionError):
+                        logger.exception(
+                            "Timeout while sending lock command to Sesame [UUID=%s]",
+                            control.device_uuid,
+                        )
                 case "UNLOCKED":
-                    await sesame.unlock(history_name)
-                    logger.debug(
-                        "Send unlock command to Sesame [UUID=%s]",
-                        control.device_uuid,
-                    )
+                    try:
+                        await sesame.unlock(history_name)
+                        logger.debug(
+                            "Send unlock command to Sesame [UUID=%s]",
+                            control.device_uuid,
+                        )
+                    except (asyncio.TimeoutError, SesameConnectionError):
+                        logger.exception(
+                            "Timeout while sending unlock command to Sesame [UUID=%s]",
+                            control.device_uuid,
+                        )
                 case _:
                     logger.warning(
                         "Invalid command for Sesame [UUID=%s, command=%s]",
