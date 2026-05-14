@@ -19,7 +19,7 @@ from gomalock.exc import SesameConnectionError
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("bleak").setLevel(level=logging.WARNING)
-logging.getLogger("gomalock").setLevel(level=logging.INFO)
+logging.getLogger("gomalock").setLevel(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -221,29 +221,32 @@ async def _consume_control(
                 continue
             match command_str:
                 case "LOCKED":
-                    try:
-                        await sesame.lock(history_name)
-                        logger.debug(
-                            "Send lock command to Sesame [UUID=%s]",
-                            control.device_uuid,
-                        )
-                    except (asyncio.TimeoutError, SesameConnectionError):
-                        logger.exception(
-                            "Timeout while sending lock command to Sesame [UUID=%s]",
-                            control.device_uuid,
-                        )
+                    while True:
+                        try:
+                            await sesame.lock(history_name)
+                            logger.debug(
+                                "Lock command succeeded [UUID=%s]", control.device_uuid
+                            )
+                            break
+                        except (asyncio.TimeoutError, SesameConnectionError):
+                            logger.exception(
+                                "Lock command failed, retrying... [UUID=%s]",
+                                control.device_uuid,
+                            )
                 case "UNLOCKED":
-                    try:
-                        await sesame.unlock(history_name)
-                        logger.debug(
-                            "Send unlock command to Sesame [UUID=%s]",
-                            control.device_uuid,
-                        )
-                    except (asyncio.TimeoutError, SesameConnectionError):
-                        logger.exception(
-                            "Timeout while sending unlock command to Sesame [UUID=%s]",
-                            control.device_uuid,
-                        )
+                    while True:
+                        try:
+                            await sesame.unlock(history_name)
+                            logger.debug(
+                                "Unlock command succeeded [UUID=%s]",
+                                control.device_uuid,
+                            )
+                            break
+                        except (asyncio.TimeoutError, SesameConnectionError):
+                            logger.exception(
+                                "Unlock command failed, retrying... [UUID=%s]",
+                                control.device_uuid,
+                            )
                 case _:
                     logger.warning(
                         "Invalid command for Sesame [UUID=%s, command=%s]",
