@@ -161,7 +161,7 @@ async def _consume_status(
                         qos=aiomqtt.QoS.AT_LEAST_ONCE,
                         packet_id=packet_id,
                         duplicate=is_duplicate,
-                        retain=True
+                        retain=True,
                     )
                     break
                 except aiomqtt.ConnectError:
