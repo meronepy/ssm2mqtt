@@ -1,13 +1,15 @@
 {
-    "history_name": "ssm2mqtt",
     "mqtt": {
-        "base_topic": "ssm2mqtt",
         "host": "localhost",
         "port": 1883,
         "user": "",
-        "password": ""
+        "password": "",
+        "base_topic": "ssm2mqtt"
     },
     "devices": {
         "XX:XX:XX:XX:XX:XX": "1234567890abcdef1234567890abcdef"
-    }
+    },
+    "log_level": "info",
+    "history_name": "ssm2mqtt",
+    "sesame_reconnection_limit": 10
 }

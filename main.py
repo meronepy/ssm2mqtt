@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 class _BridgeConfig(NamedTuple):
-    history_name: str
-    sesame_reconnection_limit: int
-    log_level: Literal[10, 20, 30, 40, 50]
-    base_topic: str
     host: str
     port: int
     user: str | None
     password: bytes | None
+    base_topic: str
+    log_level: Literal[10, 20, 30, 40, 50]
+    history_name: str
+    sesame_reconnection_limit: int
 
 
 class _TargetDevice(NamedTuple):
@@ -49,20 +49,20 @@ class _ControlPayload(NamedTuple):
 def _load_config() -> tuple[_BridgeConfig, tuple[_TargetDevice, ...]]:
     with open("config.json", "r", encoding="utf8") as f:
         user_config: dict = json.load(f)
-    mqtt_config: dict = user_config.get("mqtt", {})
+    mqtt_config: dict = user_config["mqtt"]
     bridge_config = _BridgeConfig(
+        mqtt_config["host"],
+        mqtt_config["port"],
+        mqtt_config["user"] or None,
+        mqtt_config["password"].encode("utf-8") or None,
+        mqtt_config.get("base_topic", "ssm2mqtt"),
+        getattr(logging, user_config.get("log_level", "INFO").upper()),
         user_config.get("history_name", "ssm2mqtt"),
         user_config.get("sesame_reconnection_limit", 10),
-        getattr(logging, user_config.get("log_level", "").upper(), logging.INFO),
-        mqtt_config.get("base_topic", "ssm2mqtt"),
-        mqtt_config.get("host", "localhost"),
-        mqtt_config.get("port", 1883),
-        mqtt_config.get("user") or None,
-        mqtt_config.get("password", "").encode("utf-8") or None,
     )
     target_devices = tuple(
         _TargetDevice(address, secret_key)
-        for address, secret_key in user_config.get("devices", {}).items()
+        for address, secret_key in user_config["devices"].items()
     )
     return bridge_config, target_devices
 

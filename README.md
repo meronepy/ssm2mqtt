@@ -171,18 +171,24 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 
 ### キーの説明
 
+必須の項目は**太字**で表記しています。  
+デフォルト値のある項目は任意の項目です。必要に応じて`config.json`に追記してください。
+
 |キー|説明|
 |---|---|
-|history_name|操作履歴に表示する名前|
-|base_topic|ssm2mqttが使用する共通のルートトピック|
-|host|MQTTブローカーのIPアドレス|
-|port|MQTTブローカーのポート|
-|user|MQTTのユーザー名, 空欄で無効|
-|password|MQTTのパスワード, 空欄で無効|
-|devices|セサミのMACアドレスとシークレットキーのペア|
+|**host**|MQTTブローカーのIPアドレス|
+|**port**|MQTTブローカーのポート|
+|**user**|MQTTのユーザー名, 空欄で無効|
+|**password**|MQTTのパスワード, 空欄で無効|
+|**devices**|セサミのMACアドレスとシークレットキーのペア|
+|base_topic|ssm2mqttが使用する共通のルートトピック (デフォルト値: `"ssm2mqtt"`)|
+|log_level|出力するログのレベル (デフォルト値: `"info"`)|
+|history_name|操作履歴に表示する名前 (デフォルト値: `"ssm2mqtt"`)|
+|sesame_reconnection_limit|セサミの自動再接続の最大試行数, `0`で無効 (デフォルト値: `10`)|
 
 > `devices`には複数のセサミを設定できます。  
-> `base_topic`に`/`を含めることはできません。
+> `base_topic`に`/`を含めることはできません。  
+> ログレベルは`"critical"`, `"error"`, `"warning"`, `"info"`, `"debug"`です。
 
 ---
 
