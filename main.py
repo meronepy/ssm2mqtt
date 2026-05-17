@@ -11,19 +11,19 @@ import json
 import logging
 import signal
 import uuid
-from typing import NamedTuple
+from typing import Any, Callable, Coroutine, Literal, NamedTuple
 
 import aiomqtt
 import gomalock
 from gomalock.exc import SesameConnectionError
 
-logging.basicConfig(level=logging.INFO)
-logging.getLogger("bleak").setLevel(level=logging.WARNING)
-logging.getLogger("gomalock").setLevel(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-class _MqttConfig(NamedTuple):
+class _BridgeConfig(NamedTuple):
+    history_name: str
+    sesame_reconnection_limit: int
+    log_level: Literal[10, 20, 30, 40, 50]
     base_topic: str
     host: str
     port: int
@@ -46,26 +46,31 @@ class _ControlPayload(NamedTuple):
     command: bytes
 
 
-def _load_config() -> tuple[str, _MqttConfig, list[_TargetDevice]]:
+def _load_config() -> tuple[_BridgeConfig, tuple[_TargetDevice, ...]]:
     with open("config.json", "r", encoding="utf8") as f:
-        user_config = json.load(f)
-        history_name: str = user_config["history_name"]
-        mqtt: dict = user_config["mqtt"]
-        password = mqtt.get("password")
-        if isinstance(password, str):
-            password = password.encode("utf-8")
-        mqtt_config = _MqttConfig(
-            mqtt["base_topic"],
-            mqtt["host"],
-            mqtt["port"],
-            mqtt.get("user"),
-            password,
-        )
-        target_devices = [
-            _TargetDevice(address, secret_key)
-            for address, secret_key in user_config["devices"].items()
-        ]
-    return history_name, mqtt_config, target_devices
+        user_config: dict = json.load(f)
+    mqtt_config: dict = user_config.get("mqtt", {})
+    bridge_config = _BridgeConfig(
+        user_config.get("history_name", "ssm2mqtt"),
+        user_config.get("sesame_reconnection_limit", 10),
+        getattr(logging, user_config.get("log_level", "").upper(), logging.INFO),
+        mqtt_config.get("base_topic", "ssm2mqtt"),
+        mqtt_config.get("host", "localhost"),
+        mqtt_config.get("port", 1883),
+        mqtt_config.get("user") or None,
+        mqtt_config.get("password", "").encode("utf-8") or None,
+    )
+    target_devices = tuple(
+        _TargetDevice(address, secret_key)
+        for address, secret_key in user_config.get("devices", {}).items()
+    )
+    return bridge_config, target_devices
+
+
+def _configure_log_level(log_level: Literal[10, 20, 30, 40, 50]) -> None:
+    logging.basicConfig(level=log_level)
+    logging.getLogger("bleak").setLevel(level=logging.WARNING)
+    logging.getLogger("gomalock.scanner").setLevel(level=logging.WARNING)
 
 
 def _configure_signal_handlers(stop_event: asyncio.Event) -> None:
@@ -79,25 +84,25 @@ def _configure_signal_handlers(stop_event: asyncio.Event) -> None:
 
 
 async def _configure_mqttc(
-    stack: contextlib.AsyncExitStack, mqtt_config: _MqttConfig
+    stack: contextlib.AsyncExitStack, bridge_config: _BridgeConfig
 ) -> aiomqtt.Client:
     mqttc = await stack.enter_async_context(
         aiomqtt.Client(
-            hostname=mqtt_config.host,
-            port=mqtt_config.port,
-            username=mqtt_config.user,
-            password=mqtt_config.password,
+            hostname=bridge_config.host,
+            port=bridge_config.port,
+            username=bridge_config.user,
+            password=bridge_config.password,
             reconnect=True,
         )
     )
     await mqttc.subscribe(
-        f"{mqtt_config.base_topic}/+/set", max_qos=aiomqtt.QoS.AT_LEAST_ONCE
+        f"{bridge_config.base_topic}/+/set", max_qos=aiomqtt.QoS.AT_LEAST_ONCE
     )
     logger.info(
         "Connected to MQTT broker [host=%s, port=%d, base_topic=%s]",
-        mqtt_config.host,
-        mqtt_config.port,
-        mqtt_config.base_topic,
+        bridge_config.host,
+        bridge_config.port,
+        bridge_config.base_topic,
     )
     return mqttc
 
@@ -105,19 +110,39 @@ async def _configure_mqttc(
 async def _configure_sesame(
     stack: contextlib.AsyncExitStack,
     status_queue: asyncio.Queue[_StatusPayload],
-    target_devices: list[_TargetDevice],
+    target_devices: tuple[_TargetDevice, ...],
+    reconnection_limit: int,
 ) -> dict[uuid.UUID, gomalock.Sesame5]:
     connected_devices = {}
     for address, secret_key in target_devices:
         sesame = await stack.enter_async_context(
             gomalock.Sesame5(
-                address, secret_key, functools.partial(_produce_status, status_queue), 5
+                address,
+                secret_key,
+                functools.partial(_produce_status, status_queue),
+                reconnection_limit,
             )
         )
         device_uuid = sesame.sesame_advertisement_data.device_uuid
         connected_devices[device_uuid] = sesame
         logger.info("Connected to Sesame device [UUID=%s]", device_uuid)
     return connected_devices
+
+
+async def _perform_sesame_command_with_retry[**P, T](
+    retry: bool,
+    func: Callable[P, Coroutine[Any, Any, T]],
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> T:
+    if not retry:
+        return await func(*args, **kwargs)
+    while True:
+        try:
+            return await func(*args, **kwargs)
+        except (asyncio.TimeoutError, SesameConnectionError):
+            # No sleep interval needed; gomalock automatically handles reconnection.
+            logger.exception("Command failed, retrying...")
 
 
 def _produce_status(
@@ -139,7 +164,7 @@ async def _consume_status(
         try:
             status = await queue.get()
         except asyncio.QueueShutDown:
-            break
+            return
         try:
             payload = json.dumps(
                 {
@@ -201,12 +226,13 @@ async def _consume_control(
     queue: asyncio.Queue[_ControlPayload],
     connected_devices: dict[uuid.UUID, gomalock.Sesame5],
     history_name: str,
+    retry: bool,
 ) -> None:
     while True:
         try:
             control = await queue.get()
         except asyncio.QueueShutDown:
-            break
+            return
         try:
             sesame = connected_devices.get(control.device_uuid)
             if sesame is None:
@@ -221,32 +247,19 @@ async def _consume_control(
                 continue
             match command_str:
                 case "LOCKED":
-                    while True:
-                        try:
-                            await sesame.lock(history_name)
-                            logger.debug(
-                                "Lock command succeeded [UUID=%s]", control.device_uuid
-                            )
-                            break
-                        except (asyncio.TimeoutError, SesameConnectionError):
-                            logger.exception(
-                                "Lock command failed, retrying... [UUID=%s]",
-                                control.device_uuid,
-                            )
+                    await _perform_sesame_command_with_retry(
+                        retry, sesame.lock, history_name
+                    )
+                    logger.debug(
+                        "Lock command succeeded [UUID=%s]", control.device_uuid
+                    )
                 case "UNLOCKED":
-                    while True:
-                        try:
-                            await sesame.unlock(history_name)
-                            logger.debug(
-                                "Unlock command succeeded [UUID=%s]",
-                                control.device_uuid,
-                            )
-                            break
-                        except (asyncio.TimeoutError, SesameConnectionError):
-                            logger.exception(
-                                "Unlock command failed, retrying... [UUID=%s]",
-                                control.device_uuid,
-                            )
+                    await _perform_sesame_command_with_retry(
+                        retry, sesame.unlock, history_name
+                    )
+                    logger.debug(
+                        "Unlock command succeeded [UUID=%s]", control.device_uuid
+                    )
                 case _:
                     logger.warning(
                         "Invalid command for Sesame [UUID=%s, command=%s]",
@@ -263,16 +276,32 @@ async def main() -> None:
     status_queue: asyncio.Queue[_StatusPayload] = asyncio.Queue()
     control_queue: asyncio.Queue[_ControlPayload] = asyncio.Queue()
 
+    bridge_config, target_devices = _load_config()
+    _configure_log_level(bridge_config.log_level)
     _configure_signal_handlers(stop_event)
-    history_name, mqtt_config, target_devices = _load_config()
 
     async with contextlib.AsyncExitStack() as stack:
-        mqttc = await _configure_mqttc(stack, mqtt_config)
-        connected_devices = await _configure_sesame(stack, status_queue, target_devices)
+        mqttc = await _configure_mqttc(stack, bridge_config)
+        connected_devices = await _configure_sesame(
+            stack, status_queue, target_devices, bridge_config.sesame_reconnection_limit
+        )
         tg = await stack.enter_async_context(asyncio.TaskGroup())
 
-        tg.create_task(_consume_status(status_queue, mqttc, mqtt_config.base_topic))
-        tg.create_task(_consume_control(control_queue, connected_devices, history_name))
+        tg.create_task(
+            _consume_status(
+                status_queue,
+                mqttc,
+                bridge_config.base_topic,
+            )
+        )
+        tg.create_task(
+            _consume_control(
+                control_queue,
+                connected_devices,
+                bridge_config.history_name,
+                bridge_config.sesame_reconnection_limit > 0,
+            )
+        )
         produce_control_task = tg.create_task(_produce_control(control_queue, mqttc))
         logger.info("ssm2mqtt is running")
 
