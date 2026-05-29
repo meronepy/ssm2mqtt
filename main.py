@@ -53,8 +53,8 @@ def _load_config() -> tuple[_BridgeConfig, tuple[_TargetDevice, ...]]:
     bridge_config = _BridgeConfig(
         mqtt_config["host"],
         mqtt_config["port"],
-        mqtt_config["user"] or None,
-        mqtt_config["password"].encode("utf-8") or None,
+        mqtt_config.get("user") or None,
+        mqtt_config.get("password", "").encode("utf-8") or None,
         mqtt_config.get("base_topic", "ssm2mqtt"),
         getattr(logging, user_config.get("log_level", "INFO").upper()),
         user_config.get("history_name", "ssm2mqtt"),
@@ -245,7 +245,7 @@ async def _consume_control(
             except UnicodeDecodeError:
                 logger.warning("Invalid encoded payload [UUID=%s]", control.device_uuid)
                 continue
-            match command_str:
+            match command_str.upper():
                 case "LOCKED":
                     await _perform_sesame_command_with_retry(
                         retry, sesame.lock, history_name

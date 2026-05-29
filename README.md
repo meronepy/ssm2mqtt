@@ -1,8 +1,7 @@
 # [ssm2mqtt](https://github.com/meronepy/ssm2mqtt)
 
-![Python](https://img.shields.io/badge/python-3.13-5da1d8)
-[![License](https://img.shields.io/badge/license-MIT-5da1d8)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Linux%20%2F%20Windows%20%2F%20macOS-ffb8d2)
+![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fmeronepy%2Fssm2mqtt%2Fmain%2Fpyproject.toml&color=b164ff)
+[![License](https://img.shields.io/badge/license-MIT-29b6ff)](LICENSE)
 
 BluetoothでSesame 5デバイスとMQTTをブリッジするPythonスクリプト  
 HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能にします
@@ -153,19 +152,21 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 
 ```json
 {
-    "history_name": "ssm2mqtt",
     "mqtt": {
-        "base_topic": "ssm2mqtt",
         "host": "localhost",
         "port": 1883,
         "user": "",
-        "password": ""
+        "password": "",
+        "base_topic": "ssm2mqtt"
     },
     "devices": {
         "XX:XX:XX:XX:XX:XX": "1234567890abcdef1234567890abcdef",
         "YY:YY:YY:YY:YY:YY": "1234567890abcdef1234567890abcdef",
         "ZZ:ZZ:ZZ:ZZ:ZZ:ZZ": "1234567890abcdef1234567890abcdef"
-    }
+    },
+    "log_level": "info",
+    "history_name": "ssm2mqtt",
+    "sesame_reconnection_limit": 10
 }
 ```
 
@@ -176,11 +177,11 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 
 |キー|説明|
 |---|---|
-|**host**|MQTTブローカーのIPアドレス|
-|**port**|MQTTブローカーのポート|
-|**user**|MQTTのユーザー名, 空欄で無効|
-|**password**|MQTTのパスワード, 空欄で無効|
+|**mqtt{host}**|MQTTブローカーのIPアドレス|
+|**mqtt{port}**|MQTTブローカーのポート|
 |**devices**|セサミのMACアドレスとシークレットキーのペア|
+|mqtt{user}|MQTTのユーザー名, 未設定または空欄で無効 (デフォルト値: `""`)|
+|mqtt{password}|MQTTのパスワード, 未設定または空欄で無効 (デフォルト値: `""`)|
 |base_topic|ssm2mqttが使用する共通のルートトピック (デフォルト値: `"ssm2mqtt"`)|
 |log_level|出力するログのレベル (デフォルト値: `"info"`)|
 |history_name|操作履歴に表示する名前 (デフォルト値: `"ssm2mqtt"`)|
