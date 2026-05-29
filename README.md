@@ -182,7 +182,7 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 |**devices**|セサミのMACアドレスとシークレットキーのペア|
 |mqtt{user}|MQTTのユーザー名, 未設定または空欄で無効 (デフォルト値: `""`)|
 |mqtt{password}|MQTTのパスワード, 未設定または空欄で無効 (デフォルト値: `""`)|
-|base_topic|ssm2mqttが使用する共通のルートトピック (デフォルト値: `"ssm2mqtt"`)|
+|mqtt{base_topic}|ssm2mqttが使用する共通のルートトピック (デフォルト値: `"ssm2mqtt"`)|
 |log_level|出力するログのレベル (デフォルト値: `"info"`)|
 |history_name|操作履歴に表示する名前 (デフォルト値: `"ssm2mqtt"`)|
 |sesame_reconnection_limit|セサミの自動再接続の最大試行数, `0`で無効 (デフォルト値: `10`)|
