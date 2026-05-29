@@ -1,6 +1,6 @@
 [project]
 name = "ssm2mqtt"
-version = "0.3.0"
+version = "0.4.0"
 description = "Sesame 5 to MQTT bridge for lock control and status reporting"
 readme = "README.md"
 requires-python = ">=3.13"
