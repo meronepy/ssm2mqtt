@@ -50,12 +50,15 @@ def _load_config() -> tuple[_BridgeConfig, tuple[_TargetDevice, ...]]:
     with open("config.json", "r", encoding="utf8") as f:
         user_config: dict = json.load(f)
     mqtt_config: dict = user_config["mqtt"]
+    base_topic = mqtt_config.get("base_topic", "ssm2mqtt")
+    if "/" in base_topic:
+        raise ValueError("base_topic must not contain '/'")
     bridge_config = _BridgeConfig(
         mqtt_config["host"],
         mqtt_config["port"],
         mqtt_config.get("user") or None,
         mqtt_config.get("password", "").encode("utf-8") or None,
-        mqtt_config.get("base_topic", "ssm2mqtt"),
+        base_topic,
         getattr(logging, user_config.get("log_level", "INFO").upper()),
         user_config.get("history_name", "ssm2mqtt"),
         user_config.get("sesame_reconnection_limit", 10),
@@ -287,31 +290,34 @@ async def main() -> None:
         )
         tg = await stack.enter_async_context(asyncio.TaskGroup())
 
-        tg.create_task(
-            _consume_status(
-                status_queue,
-                mqttc,
-                bridge_config.base_topic,
-            )
+        tasks = (
+            tg.create_task(
+                _consume_status(
+                    status_queue,
+                    mqttc,
+                    bridge_config.base_topic,
+                )
+            ),
+            tg.create_task(
+                _consume_control(
+                    control_queue,
+                    connected_devices,
+                    bridge_config.history_name,
+                    bridge_config.sesame_reconnection_limit > 0,
+                )
+            ),
+            tg.create_task(_produce_control(control_queue, mqttc)),
         )
-        tg.create_task(
-            _consume_control(
-                control_queue,
-                connected_devices,
-                bridge_config.history_name,
-                bridge_config.sesame_reconnection_limit > 0,
-            )
-        )
-        produce_control_task = tg.create_task(_produce_control(control_queue, mqttc))
         logger.info("ssm2mqtt is running")
 
         await stop_event.wait()
         logger.info("Shutting down ssm2mqtt")
-        produce_control_task.cancel()
         status_queue.shutdown()
         control_queue.shutdown()
         await asyncio.wait_for(status_queue.join(), timeout=10)
         await asyncio.wait_for(control_queue.join(), timeout=10)
+        for task in tasks:
+            task.cancel()
     logger.info("ssm2mqtt has been shut down")
 
 
