@@ -26,10 +26,10 @@ in_deps {
   gsub(/^[[:space:]]+|[",]/, "", $0)
   if (length($0) >  0) print $0
 }
-' "$ROOT_DIR/pyproject.toml" > "$STAGE_DIR/requirements.txt"
+' "$ROOT_DIR/pyproject.toml" >"$STAGE_DIR/requirements.txt"
 
 mkdir -p "$DIST_DIR"
-echo "*" > "$DIST_DIR/.gitignore"
-(cd "$TMP_DIR" && zip -r "$DIST_DIR/$DIST_NAME" ssm2mqtt > /dev/null)
+echo "*" >"$DIST_DIR/.gitignore"
+(cd "$TMP_DIR" && zip -r "$DIST_DIR/$DIST_NAME" ssm2mqtt >/dev/null)
 
 echo "Created $DIST_DIR/$DIST_NAME"
