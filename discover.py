@@ -12,7 +12,7 @@ from gomalock.scanner import SesameScanner
 async def main():
     """Scan for Sesame BLE devices and print their information."""
     print("-" * 50)
-    devices = await SesameScanner.discover(timeout=10)
+    devices = await SesameScanner.discover(timeout=30)
     for address, sesame_adv_data in devices.items():
         print(f"{'Address':11}: {address}")
         print(f"{'Model':11}: {sesame_adv_data.product_model.name}")
