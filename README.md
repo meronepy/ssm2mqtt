@@ -54,7 +54,7 @@ HomebridgeやHome Assistantから、BLE経由でのSesame 5の操作を可能に
      .venv/bin/pip install -r requirements.txt
      ```
 
-7. `config.json`を編集
+7. `config.json`を編集 ([設定内容はこちら](#configjsonについて))
 
     ```bash
     nano config.json
@@ -152,7 +152,7 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
     --------------------------------------------------
     ```
 
-- シークレットキーはmochipon様作成の[QR Code Reader for SESAME](https://sesame-qr-reader.vercel.app/)を使用して、マネージャー権限以上のQRコードから抽出できます。
+- シークレットキーはmochipon様作成の[QR Code Reader for SESAME](https://sesame-qr-reader.vercel.app/)を使用して、マネージャー権限以上のQRコードから抽出するか、[SESAME Biz](https://biz.candyhouse.co/)から取得できます。
 
 ### 設定例
 
@@ -199,7 +199,9 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 
 ---
 
-## 対応機種
+## 対応環境
+
+### 対応機種
 
 |対応状況|機種|
 |:-:|:-:|
@@ -208,20 +210,34 @@ mosquitto_sub -t "ssm2mqtt/12345678-90ab-cdef-1234-567890abcdef/get"
 |⚠️|Sesame 5 USA (未検証)|
 |❌|Sesame 4以前|
 
+### 対応OS
+
+|対応状況|OS|
+|:-:|:-:|
+|✅|Windows 11 version 22000 以降|
+|✅|Linux with BlueZ 5.82 以降|
+|⚠️|macOS 10.15 以降 (未検証)|
+
+### Python
+
+Python 3.13以降が必要です。
+
 ---
 
 ## 開発環境
 
 - Windows 11 24H2, Python 3.13.3
 - Raspberry Pi Zero 2W, Raspberry Pi OS Trixie (64bit), Python 3.13.3
-- Sesame 5, 3.0-5-18a8e4
-- Sesame 5 Pro, 3.0-7-848a2d
+- Sesame 5, 3.0-5-ad26ee
+- Sesame 5 Pro, 3.0-7-ad26ee
 
 ---
 
 ## 注意事項
 
-- Linuxで動作させる場合、 **BlueZ 5.82以降を推奨します。**
-- Python 3.13以降が必要です。
-- macOS環境でも動作すると思われますが、動作未確認です。
+- Bluetoothは距離が近いほど安定します。下記のような問題があるときは、Sesameとの距離を近づけて何度かやり直してみてください。公式アプリでSesameのBLE送信出力を上げることも有効です。
+  - `discover.py`でSesameが検出されない。
+  - `SesameConnectionError: Device not found"`や`SesameConnectionError: Failed to connect to device`等のエラーが出て接続に失敗する。
+  - 接続やログインは成功するが、施錠や開錠に失敗する。
+- Linuxでは **BlueZ 5.82 (Raspberry Pi OS Trixie)以降が必要です。**
 - このスクリプトは、[gomalock](https://github.com/meronepy/gomalock)ライブラリの動作確認を目的として作成されています。動作保証はありません。自己責任でご使用ください。
